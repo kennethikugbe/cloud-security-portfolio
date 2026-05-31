@@ -1,0 +1,15 @@
+# Terraform state (remote backend holds truth)
+terraform.tfstate
+terraform.tfstate.backup
+*.tfstate.*
+
+# Terraform provider cache
+.terraform/
+.terraform.lock.hcl
+
+# Binary plan files
+*.plan
+
+# Environment-specific backend configs
+backend.hcl
+*.auto.tfvars
