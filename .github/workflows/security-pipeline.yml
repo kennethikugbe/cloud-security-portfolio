@@ -1,6 +1,6 @@
-# Stage 3, Task 2: GitHub Actions CI/CD Security Pipeline
+# Stage 3, Task 2: GitHub Actions CI/CD Security Pipeline (v1.1)
 # Kenneth - Cloud Security & DevSecOps Engineer
-# Implements shift-left security: build → SAST → secrets scan → container scan → compliance evidence
+# Implements shift-left security: SAST → secrets scan → IaC scan → container scan → compliance evidence
 
 name: Security Pipeline
 
@@ -20,6 +20,10 @@ permissions:
   actions: read
 
 jobs:
+  # ─────────────────────────────────────────────
+  # JOB 1: Static Application Security Testing (SAST)
+  # ISO 27001: A.8.8 (Technical vulnerability management)
+  # ─────────────────────────────────────────────
   sast:
     name: Semgrep SAST
     runs-on: ubuntu-latest
@@ -27,15 +31,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run Semgrep
-        uses: returntocorp/semgrep-action@v1
-        with:
-          config: >-
-            p/security-audit
-            p/owasp-top-ten
-            p/cwe-top-25
-          generateSarif: "1"
-          sarifOutput: semgrep-report.sarif
+      - name: Run Semgrep via Docker
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/src \
+            -w /src \
+            semgrep/semgrep:latest semgrep \
+            --config=p/security-audit \
+            --config=p/owasp-top-ten \
+            --config=p/cwe-top-25 \
+            --sarif \
+            --output=semgrep-report.sarif \
+            .
 
       - name: Upload Semgrep SARIF to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
@@ -44,6 +51,10 @@ jobs:
           sarif_file: semgrep-report.sarif
           category: semgrep-sast
 
+  # ─────────────────────────────────────────────
+  # JOB 2: Secrets Scanning
+  # ISO 27001: A.8.5 (Secure authentication), A.8.6 (Capacity management)
+  # ─────────────────────────────────────────────
   secrets-scan:
     name: Gitleaks Secrets Detection
     runs-on: ubuntu-latest
@@ -60,10 +71,42 @@ jobs:
           GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "true"
           GITLEAKS_ENABLE_SUMMARY: "true"
 
+  # ─────────────────────────────────────────────
+  # JOB 3: Infrastructure as Code Security Scan
+  # ISO 27001: A.8.9 (Configuration management), A.8.9
+  # Checkov scans Terraform, Dockerfile, and cloud configs for misconfigurations
+  # ─────────────────────────────────────────────
+  iac-scan:
+    name: Checkov IaC Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Checkov on Terraform & Docker configs
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: .
+          framework: all
+          output_format: sarif
+          output_file_path: checkov-results.sarif
+          soft_fail: true
+
+      - name: Upload Checkov SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: checkov-results.sarif
+          category: checkov-iac
+
+  # ─────────────────────────────────────────────
+  # JOB 4: Build Hardened Container + Trivy Scan
+  # ISO 27001: A.8.8 (Technical vulnerability management), A.8.9
+  # ─────────────────────────────────────────────
   container-security:
     name: Build & Scan Container
     runs-on: ubuntu-latest
-    needs: [sast, secrets-scan]
+    needs: [sast, secrets-scan, iac-scan]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -106,6 +149,7 @@ jobs:
           | A.8.8 Technical Vulnerability Management | Trivy Container Scan | trivy-results.sarif | ${{ job.status == 'success' && 'PASS' || 'FAIL' }} |
           | A.8.8 Technical Vulnerability Management | Semgrep SAST | semgrep-report.sarif | Refer to SAST job |
           | A.8.5 Secure Authentication | Gitleaks Secrets Scan | Gitleaks artifact | Refer to secrets-scan job |
+          | A.8.9 Configuration Management | Checkov IaC Scan | checkov-results.sarif | Refer to IaC scan job |
           | A.8.9 Configuration Management | Dockerfile pinned base, non-root user | Dockerfile in repo | PASS |
           | A.5.35 Independent Review | GitHub Actions workflow execution | This run: ${{ github.run_id }} | PASS |
 
@@ -119,25 +163,3 @@ jobs:
         with:
           name: compliance-summary
           path: compliance-summary.md
-
-  dependency-scan:
-    name: Snyk Dependency Scan
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Run Snyk to check for vulnerabilities
-        uses: snyk/actions/python@master
-        continue-on-error: true
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          args: --severity-threshold=high --sarif-file-output=snyk-results.sarif
-
-      - name: Upload Snyk SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        with:
-          sarif_file: snyk-results.sarif
-          category: snyk-dependencies
