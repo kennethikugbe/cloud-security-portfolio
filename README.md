@@ -14,8 +14,8 @@ This repository documents a systematic, hands-on apprenticeship in Cloud Securit
 |-------|-------|--------|----------------|
 | **1 — Linux Security Automation** | Bash scripting, CIS hardening, network scanning, Python compliance parsing | **Complete** | `host_audit.sh`, `host_hardening_audit_v2.sh`, `network_scanner.sh`, `generate_risk_register.py` |
 | **2 — Infrastructure as Code (Azure)** | Terraform, remote state, network segmentation, cloud-init, VM hardening | **Complete** | Resource Group, VNet, NSG, encrypted remote backend, dynamic `init-backend.sh`, cloud-init YAML |
-| **3 — DevSecOps & Container Security** | Docker hardening, Trivy scanning, GitHub Actions CI/CD, SAST/DAST gates | **Next** | Hardened container, security pipeline, automated compliance reports |
-| **4 — Secure Cloud Architecture** | Azure security services, Key Vault, private endpoints, managed identities, Defender for Cloud | **Planned** | Hardened multi-tier architecture with ISO 27001 control mapping |
+| **3 — DevSecOps & Container Security** | Docker hardening, Trivy scanning, GitHub Actions CI/CD, SAST/IaC/Secrets gates | **Complete** | Hardened container (0 CVEs), multi-job security pipeline, SARIF evidence, compliance summaries |
+| **4 — Secure Cloud Architecture** | Azure Key Vault, private endpoints, managed identities, Defender for Cloud, Sentinel | **Next** | Hardened multi-tier architecture with full ISO 27001 control mapping |
 | **5 — Detection & Response** | Wazuh, MITRE ATT&CK mapping, incident response runbooks, log analysis | **Planned** | SIEM deployment, threat modelling, IR playbook |
 | **6 — Capstone** | Integrated fictional company scenario: audit + infrastructure + pipeline + IR | **Planned** | End-to-end portfolio piece for hiring manager review |
 
@@ -30,8 +30,4 @@ This repository documents a systematic, hands-on apprenticeship in Cloud Securit
 | Theory without control mapping | Every resource and script mapped to ISO 27001:2022 controls (A.5.9, A.8.1, A.8.5, A.8.9, A.8.20, A.10.1, A.12.3) |
 | Click-ops in cloud console | Zero portal clicks; 100% Terraform with version pinning, remote state, and automated backend initialization |
 | Single environment | Cross-environment awareness: local Linux VM → Azure cloud → containerized CI/CD |
-
----
-
-## Repository Structure
 
