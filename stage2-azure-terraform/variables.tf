@@ -7,7 +7,7 @@ variable "prefix" {
 variable "location" {
   description = "Azure region for resource deployment"
   type        = string
-  default     = "uksouth"
+  default     = "eastus"
 }
 
 variable "allowed_ssh_cidr" {

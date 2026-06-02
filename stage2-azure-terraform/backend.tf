@@ -1,6 +1,9 @@
 terraform {
   backend "azurerm" {
-    # All configuration injected dynamically by init-backend.sh
-    # from terraform.tfstate outputs. Zero hardcoded identifiers.
+    resource_group_name  = "kenneth-tfstate-rg"
+    storage_account_name = "kennethlabtffbpct9wt"
+    container_name       = "terraform-state"
+    key                  = "stage2.tfstate"
+    use_azuread_auth     = true
   }
 }

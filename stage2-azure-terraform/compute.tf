@@ -6,7 +6,7 @@ resource "azurerm_linux_virtual_machine" "main" {
   name                            = "${var.prefix}-vm"
   resource_group_name             = azurerm_resource_group.main.name
   location                        = azurerm_resource_group.main.location
-  size                            = "Standard_B2s"
+  size                            = "Standard_B2pts_v2"
   admin_username                  = var.admin_username
   network_interface_ids           = [azurerm_network_interface.main.id]
   disable_password_authentication = true
