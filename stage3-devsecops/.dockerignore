@@ -1,0 +1,10 @@
+# Prevent sensitive files from entering Docker build context
+**/.git
+**/.terraform
+**/*.tfstate
+**/*.tfstate.*
+**/*.plan
+**/*.md
+**/.ssh
+**/.env
+**/backend.hcl

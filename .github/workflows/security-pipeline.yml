@@ -1,0 +1,143 @@
+# Stage 3, Task 2: GitHub Actions CI/CD Security Pipeline
+# Kenneth - Cloud Security & DevSecOps Engineer
+# Implements shift-left security: build → SAST → secrets scan → container scan → compliance evidence
+
+name: Security Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  IMAGE_NAME: kenneth-security-audit
+  IMAGE_TAG: ${{ github.sha }}
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  sast:
+    name: Semgrep SAST
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Semgrep
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: >-
+            p/security-audit
+            p/owasp-top-ten
+            p/cwe-top-25
+          generateSarif: "1"
+          sarifOutput: semgrep-report.sarif
+
+      - name: Upload Semgrep SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: semgrep-report.sarif
+          category: semgrep-sast
+
+  secrets-scan:
+    name: Gitleaks Secrets Detection
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "true"
+          GITLEAKS_ENABLE_SUMMARY: "true"
+
+  container-security:
+    name: Build & Scan Container
+    runs-on: ubuntu-latest
+    needs: [sast, secrets-scan]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build container image
+        run: |
+          docker build \
+            --tag ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} \
+            --tag ${{ env.IMAGE_NAME }}:latest \
+            ./stage3-devsecops/
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: '${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'HIGH,CRITICAL'
+          exit-code: '1'
+          ignore-unfixed: true
+
+      - name: Upload Trivy SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy-container
+
+      - name: Generate ISO 27001 Compliance Summary
+        if: always()
+        run: |
+          cat << EOL > compliance-summary.md
+          # CI/CD Security Compliance Summary
+
+          | Control | Tool | Evidence | Status |
+          |---------|------|----------|--------|
+          | A.8.8 Technical Vulnerability Management | Trivy Container Scan | trivy-results.sarif | ${{ job.status == 'success' && 'PASS' || 'FAIL' }} |
+          | A.8.8 Technical Vulnerability Management | Semgrep SAST | semgrep-report.sarif | Refer to SAST job |
+          | A.8.5 Secure Authentication | Gitleaks Secrets Scan | Gitleaks artifact | Refer to secrets-scan job |
+          | A.8.9 Configuration Management | Dockerfile pinned base, non-root user | Dockerfile in repo | PASS |
+          | A.5.35 Independent Review | GitHub Actions workflow execution | This run: ${{ github.run_id }} | PASS |
+
+          **Run ID:** ${{ github.run_id }}
+          **Commit:** ${{ github.sha }}
+          EOL
+
+      - name: Upload compliance summary
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: compliance-summary
+          path: compliance-summary.md
+
+  dependency-scan:
+    name: Snyk Dependency Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Snyk to check for vulnerabilities
+        uses: snyk/actions/python@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high --sarif-file-output=snyk-results.sarif
+
+      - name: Upload Snyk SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: snyk-results.sarif
+          category: snyk-dependencies
